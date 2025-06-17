@@ -7,16 +7,31 @@ from typing import List, Dict, Any, Tuple, Optional
 
 # Assuming these are in a discoverable path or defined elsewhere
 from ..utils.imports import instructor
-from ..models.types import SemanticSectioningConfig, Line, Section, Element, ElementType, ChunkingConfig
+from ..models.types import (
+    SemanticSectioningConfig,
+    Line,
+    Section,
+    Element,
+    ElementType,
+    ChunkingConfig,
+)
 
 # --- Pydantic Models (from original) ---
 class DocumentSection(BaseModel):
-    title: str = Field(description="main topic of this section of the document (very descriptive)")
-    start_index: int = Field(description="line number where the section begins (inclusive)")
+    title: str = Field(
+        description="main topic of this section of the document (very descriptive)"
+    )
+    start_index: int = Field(
+        description="line number where the section begins (inclusive)"
+    )
+
 
 class StructuredDocument(BaseModel):
-    """obtains meaningful sections, each centered around a single concept/topic"""
-    sections: List[DocumentSection] = Field(description="an ordered list of sections of the document")
+    """Obtains meaningful sections, each centered around a single concept/topic."""
+
+    sections: List[DocumentSection] = Field(
+        description="an ordered list of sections of the document"
+    )
 
 # --- Prompts (from original) ---
 SYSTEM_PROMPT = """
@@ -91,11 +106,16 @@ def get_structured_document_for_window(
 
     if llm_provider == "anthropic":
         from anthropic import Anthropic
+
         base_url = os.environ.get("DSRAG_ANTHROPIC_BASE_URL", None)
         if base_url is not None:
-            client = instructor.from_anthropic(Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], base_url=base_url))
+            client = instructor.from_anthropic(
+                Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], base_url=base_url)
+            )
         else:
-            client = instructor.from_anthropic(Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"]))
+            client = instructor.from_anthropic(
+                Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+            )
         return client.chat.completions.create(
             model=model,
             response_model=StructuredDocument,
@@ -111,11 +131,16 @@ def get_structured_document_for_window(
         )
     elif llm_provider == "openai":
         from openai import OpenAI
+
         base_url = os.environ.get("DSRAG_OPENAI_BASE_URL", None)
         if base_url is not None:
-            client = instructor.from_openai(OpenAI(api_key=os.environ["OPENAI_API_KEY"], base_url=base_url))
+            client = instructor.from_openai(
+                OpenAI(api_key=os.environ["OPENAI_API_KEY"], base_url=base_url)
+            )
         else:
-            client = instructor.from_openai(OpenAI(api_key=os.environ["OPENAI_API_KEY"]))
+            client = instructor.from_openai(
+                OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+            )
         return client.chat.completions.create(
             model=model,
             response_model=StructuredDocument,
@@ -134,28 +159,23 @@ def get_structured_document_for_window(
         )
     elif llm_provider == "gemini":
         import google.generativeai as genai
+
         genai.configure(api_key=os.environ["GEMINI_API_KEY"])
         client = instructor.from_gemini(
             client=genai.GenerativeModel(model_name=f"models/{model}"),
-            mode=instructor.Mode.GEMINI_JSON
+            mode=instructor.Mode.GEMINI_JSON,
         )
         # For Gemini, prepend the system prompt to the user message
         combined_prompt = f"{formatted_system_prompt}\n\n<document>\n{window_text_with_lines}\n</document>"
         return client.messages.create(
-            messages=[
-                {
-                    "role": "user",
-                    "content": combined_prompt
-                }
-            ],
+            messages=[{"role": "user", "content": combined_prompt}],
             response_model=StructuredDocument,
-            generation_config={
-                "temperature": 0.0,
-                "max_output_tokens": 4000
-            }
+            generation_config={"temperature": 0.0, "max_output_tokens": 4000},
         )
     else:
-        raise ValueError("Invalid provider. Must be one of: 'anthropic', 'openai', 'gemini'.")
+        raise ValueError(
+            "Invalid provider. Must be one of: 'anthropic', 'openai', 'gemini'."
+        )
 
 def validate_and_fix_window_sections(
     sections: List[DocumentSection],
@@ -274,7 +294,9 @@ def get_sections_text(
             continue
 
         try:
-            contents = [document_lines[j]["content"] for j in range(start_index, end_index+1)]
+            contents = [
+                document_lines[j]["content"] for j in range(start_index, end_index + 1)
+            ]
         except Exception as e:
             logger.error(f"Error in get_sections_text: {e}")
             logger.error(f"Section: {s}")
@@ -282,13 +304,16 @@ def get_sections_text(
             logger.error(f"Document length: {doc_length}")
             raise e
 
-        section_dicts.append(Section(
-            title=s.title,
-            content="\n".join(contents),
-            start=start_index,
-            end=end_index
-        ))
+        section_dicts.append(
+            Section(
+                title=s.title,
+                content="\n".join(contents),
+                start=start_index,
+                end=end_index,
+            )
+        )
     return section_dicts
+
 
 def split_long_line(line: str, max_line_length: int = 200) -> List[str]:
     """
@@ -342,38 +367,45 @@ def elements_to_lines(
                 continue
             elif element["type"] in visual_elements:
                 # don't split visual elements
-                document_lines.append({
-                    "content": element["content"],
-                    "element_type": element["type"],
-                    "page_number": element.get("page_number", None),
-                    "is_visual": True,
-                })
+                document_lines.append(
+                    {
+                        "content": element["content"],
+                        "element_type": element["type"],
+                        "page_number": element.get("page_number", None),
+                        "is_visual": True,
+                    }
+                )
             else:
                 lines = element["content"].split("\n")
                 for line in lines:
                     if len(line) <= max_line_length:
-                        document_lines.append({
-                            "content": line,
-                            "element_type": element["type"],
-                            "page_number": element.get("page_number", None),
-                            "is_visual": False,
-                        })
+                        document_lines.append(
+                            {
+                                "content": line,
+                                "element_type": element["type"],
+                                "page_number": element.get("page_number", None),
+                                "is_visual": False,
+                            }
+                        )
                     else:
                         # Only split if line is too long
                         split_lines = split_long_line(line, max_line_length)
                         for split_line in split_lines:
-                            document_lines.append({
-                                "content": split_line,
-                                "element_type": element["type"],
-                                "page_number": element.get("page_number", None),
-                                "is_visual": False,
-                            })
+                            document_lines.append(
+                                {
+                                    "content": split_line,
+                                    "element_type": element["type"],
+                                    "page_number": element.get("page_number", None),
+                                    "is_visual": False,
+                                }
+                            )
         except Exception as e:
             logger.error(f"Error in elements_to_lines: {e}")
             logger.error(f"Element: {element}")
             raise e
 
     return document_lines
+
 
 def str_to_lines(document: str, max_line_length: int = 200) -> List[Line]:
     """
@@ -390,24 +422,29 @@ def str_to_lines(document: str, max_line_length: int = 200) -> List[Line]:
     lines = document.split("\n")
     for line in lines:
         if len(line) <= max_line_length:
-            document_lines.append({
-                "content": line,
-                "element_type": "NarrativeText",
-                "page_number": None,
-                "is_visual": False,
-            })
+            document_lines.append(
+                {
+                    "content": line,
+                    "element_type": "NarrativeText",
+                    "page_number": None,
+                    "is_visual": False,
+                }
+            )
         else:
             # Only split if line is too long
             split_lines = split_long_line(line, max_line_length)
             for split_line in split_lines:
-                document_lines.append({
-                    "content": split_line,
-                    "element_type": "NarrativeText",
-                    "page_number": None,
-                    "is_visual": False,
-                })
+                document_lines.append(
+                    {
+                        "content": split_line,
+                        "element_type": "NarrativeText",
+                        "page_number": None,
+                        "is_visual": False,
+                    }
+                )
 
     return document_lines
+
 
 def pages_to_lines(pages: List[str], max_line_length: int = 200) -> List[Line]:
     """
@@ -425,22 +462,26 @@ def pages_to_lines(pages: List[str], max_line_length: int = 200) -> List[Line]:
         lines = page.split("\n")
         for line in lines:
             if len(line) <= max_line_length:
-                document_lines.append({
-                    "content": line,
-                    "element_type": "NarrativeText",
-                    "page_number": i+1,  # page numbers are 1-indexed
-                    "is_visual": False,
-                })
+                document_lines.append(
+                    {
+                        "content": line,
+                        "element_type": "NarrativeText",
+                        "page_number": i + 1,  # page numbers are 1-indexed
+                        "is_visual": False,
+                    }
+                )
             else:
                 # Only split if line is too long
                 split_lines = split_long_line(line, max_line_length)
                 for split_line in split_lines:
-                    document_lines.append({
-                        "content": split_line,
-                        "element_type": "NarrativeText",
-                        "page_number": i+1,  # page numbers are 1-indexed
-                        "is_visual": False,
-                    })
+                    document_lines.append(
+                        {
+                            "content": split_line,
+                            "element_type": "NarrativeText",
+                            "page_number": i + 1,  # page numbers are 1-indexed
+                            "is_visual": False,
+                        }
+                    )
 
     return document_lines
 
