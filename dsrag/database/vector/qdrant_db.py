@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Sequence, cast
 import uuid
 from dsrag.database.vector.types import ChunkMetadata, Vector, VectorSearchResult
@@ -11,11 +13,11 @@ qdrant_client = LazyLoader("qdrant_client")
 
 
 def convert_id(_id: str) -> str:
-    """
-    Converts any string into a UUID string based on a seed.
-    Qdrant accepts UUID strings and unsigned integers as point ID.
-    We use a seed to convert each string into a UUID string deterministically.
-    This allows us to overwrite the same point with the original ID.
+    """Converts any string into a UUID string based on a seed.
+
+    Qdrant accepts UUID strings and unsigned integers as point ID. We use a seed to
+    convert each string into a UUID string deterministically. This allows us to
+    overwrite the same point with the original ID.
     """
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, _id))
 
@@ -40,8 +42,7 @@ class QdrantVectorDB(VectorDB):
         host: Optional[str] = None,
         path: Optional[str] = None,
     ):
-        """
-        Initializes a QdrantVectorDB instance.
+        """Initializes a QdrantVectorDB instance.
 
         Args:
             kb_id: An identifier for the knowledge base.
@@ -85,16 +86,13 @@ class QdrantVectorDB(VectorDB):
         self.client = qdrant_client.QdrantClient(**self.client_options)
 
     def close(self):
-        """
-        Closes the connection to Qdrant
-        """
+        """Closes the connection to Qdrant."""
         self.client.close()
 
     def add_vectors(
         self, vectors: Sequence[Vector], metadata: Sequence[ChunkMetadata]
     ) -> None:
-        """
-        Adds a list of vectors with associated metadata to Qdrant
+        """Adds a list of vectors with associated metadata to Qdrant.
 
         Args:
             vectors: A list of vector embeddings.
@@ -139,8 +137,7 @@ class QdrantVectorDB(VectorDB):
         self.client.upsert(self.kb_id, points)
 
     def remove_document(self, doc_id) -> None:
-        """
-        Removes a document from a Qdrant collection.
+        """Removes a document from a Qdrant collection.
 
         Args:
             doc_id: The UUID of the document to remove.
@@ -150,7 +147,8 @@ class QdrantVectorDB(VectorDB):
             qdrant_client.models.Filter(
                 must=[
                     qdrant_client.models.FieldCondition(
-                        key="doc_id", match=qdrant_client.models.MatchValue(value=doc_id)
+                        key="doc_id",
+                        match=qdrant_client.models.MatchValue(value=doc_id),
                     )
                 ]
             ),
@@ -162,8 +160,7 @@ class QdrantVectorDB(VectorDB):
         top_k: int = 10,
         metadata_filter: Optional[dict] = None,
     ) -> list[VectorSearchResult]:
-        """
-        Searches for the top-k closest vectors to the given query vector.
+        """Searches for the top-k closest vectors to the given query vector.
 
         Args:
             query_vector: The query vector embedding.
@@ -196,11 +193,84 @@ class QdrantVectorDB(VectorDB):
             )
         return results
 
+    def get_chunk_text(self, doc_id: str, chunk_index: int) -> Optional[str]:
+        """Retrieves the text of a specific chunk by document ID and chunk index.
+
+        Args:
+            doc_id: The ID of the document.
+            chunk_index: The index of the chunk.
+
+        Returns:
+            The text of the specified chunk, or None if not found.
+        """
+        scroll_result = self.client.scroll(
+            collection_name=self.kb_id,
+            scroll_filter=qdrant_client.models.Filter(
+                must=[
+                    qdrant_client.models.FieldCondition(
+                        key="doc_id",
+                        match=qdrant_client.models.MatchValue(value=doc_id),
+                    ),
+                    qdrant_client.models.FieldCondition(
+                        key="chunk_index",
+                        match=qdrant_client.models.MatchValue(value=chunk_index),
+                    ),
+                ]
+            ),
+            limit=1,
+        )
+
+        return (
+            scroll_result[0][0].payload.get("content", None) if scroll_result else None
+        )
+
+    def get_chunk_page_numbers(
+        self, doc_id: str, chunk_index: int
+    ) -> tuple[int | None, int | None]:
+        """Retrieves the page numbers of a specific chunk by document ID and chunk index.
+        Args:
+            doc_id: The ID of the document.
+            chunk_index: The index of the chunk.
+
+        Returns:
+            A tuple containing the start and end page numbers of the specified chunk,
+            or None if not found.
+        """
+        scroll_result = self.client.scroll(
+            collection_name=self.kb_id,
+            scroll_filter=qdrant_client.models.Filter(
+                must=[
+                    qdrant_client.models.FieldCondition(
+                        key="doc_id",
+                        match=qdrant_client.models.MatchValue(value=doc_id),
+                    ),
+                    qdrant_client.models.FieldCondition(
+                        key="chunk_index",
+                        match=qdrant_client.models.MatchValue(value=chunk_index),
+                    ),
+                ]
+            ),
+            limit=1,
+        )
+
+        if scroll_result is None:
+            return None, None
+
+        metadata = scroll_result[0][0].payload.get("metadata", {})
+        chunk_page_start = metadata.get("chunk_page_start", None)
+        chunk_page_end = metadata.get("chunk_page_end", None)
+        if chunk_page_start == "":
+            chunk_page_start = None
+        if chunk_page_end == "":
+            chunk_page_end = None
+
+        return chunk_page_start, chunk_page_end
+
     def get_num_vectors(self):
         return self.client.count(self.kb_id).count
 
     def delete(self):
-        """Deletes the collection from Qdrant"""
+        """Deletes the collection from Qdrant."""
         self.client.delete_collection(self.kb_id)
 
     def to_dict(self):

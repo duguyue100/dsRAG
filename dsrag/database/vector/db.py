@@ -30,22 +30,20 @@ class VectorDB(ABC):
     def add_vectors(
         self, vectors: Sequence[Vector], metadata: Sequence[ChunkMetadata]
     ) -> None:
-        """
-        Store a list of vectors with associated metadata.
-        """
+        """Store a list of vectors with associated metadata."""
         pass
 
     @abstractmethod
     def remove_document(self, doc_id) -> None:
-        """
-        Remove all vectors and metadata associated with a given document ID.
-        """
+        """Remove all vectors and metadata associated with a given document ID."""
         pass
 
     @abstractmethod
-    def search(self, query_vector, top_k: int=10, metadata_filter: Optional[dict] = None) -> list[VectorSearchResult]:
-        """
-        Retrieve the top-k closest vectors to a given query vector.
+    def search(
+        self, query_vector, top_k: int = 10, metadata_filter: Optional[dict] = None
+    ) -> list[VectorSearchResult]:
+        """Retrieve the top-k closest vectors to a given query vector.
+
         - needs to return results as list of dictionaries in this format:
         {
             'metadata':
@@ -61,8 +59,24 @@ class VectorDB(ABC):
         pass
 
     @abstractmethod
+    def get_chunk_text(self, doc_id: str, chunk_index: int) -> Optional[str]:
+        """Retrieve the text of a specific chunk by document ID and chunk index.
+
+        This is an optional method that may not be implemented by all vector databases.
+        """
+        pass
+
+    @abstractmethod
+    def get_chunk_page_numbers(
+        self, doc_id: str, chunk_index: int
+    ) -> Optional[tuple[int, int]]:
+        """Retrieve the page numbers of a specific chunk by document ID and chunk index.
+
+        This is an optional method that may not be implemented by all vector databases.
+        """
+        pass
+
+    @abstractmethod
     def delete(self) -> None:
-        """
-        Delete the vector database.
-        """
+        """Delete the vector database."""
         pass

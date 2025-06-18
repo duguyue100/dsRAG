@@ -12,7 +12,6 @@ from dsrag.dsparse.main import parse_and_chunk
 from dsrag.add_document import (
     auto_context,
     get_embeddings,
-    add_chunks_to_db,
     add_vectors_to_db,
 )
 from dsrag.auto_context import get_segment_header, get_chunk_summary
@@ -24,7 +23,6 @@ from dsrag.rse import (
 )
 from dsrag.database.vector import Vector, VectorDB, BasicVectorDB
 from dsrag.database.vector.types import MetadataFilter
-from dsrag.database.chunk import ChunkDB, BasicChunkDB
 from dsrag.embedding import Embedding, OpenAIEmbedding
 from dsrag.reranker import Reranker, CohereReranker
 from dsrag.llm import LLM, OpenAIChatAPI
@@ -46,7 +44,6 @@ class KnowledgeBase:
         reranker: Optional[Reranker] = None,
         auto_context_model: Optional[LLM] = None,
         vector_db: Optional[VectorDB] = None,
-        chunk_db: Optional[ChunkDB] = None,
         file_system: Optional[FileSystem] = None,
         exists_ok: bool = True,
         save_metadata_to_disk: bool = True,
@@ -69,8 +66,6 @@ class KnowledgeBase:
                 Defaults to OpenAIChatAPI.
             vector_db (Optional[VectorDB], optional): Vector database for storing embeddings.
                 Defaults to BasicVectorDB.
-            chunk_db (Optional[ChunkDB], optional): Database for storing text chunks.
-                Defaults to BasicChunkDB.
             file_system (Optional[FileSystem], optional): File system for storing images.
                 Defaults to LocalFileSystem.
             exists_ok (bool, optional): Whether to load existing KB if it exists. Defaults to True.
@@ -92,9 +87,7 @@ class KnowledgeBase:
         if save_metadata_to_disk:
             # load the KB if it exists; otherwise, initialize it and save it to disk
             if self.metadata_storage.kb_exists(self.kb_id) and exists_ok:
-                self._load(
-                    auto_context_model, reranker, file_system, chunk_db, vector_db
-                )
+                self._load(auto_context_model, reranker, file_system, vector_db)
                 self._save()
             elif self.metadata_storage.kb_exists(self.kb_id) and not exists_ok:
                 raise ValueError(
@@ -114,7 +107,6 @@ class KnowledgeBase:
                     reranker,
                     auto_context_model,
                     vector_db,
-                    chunk_db,
                     file_system,
                 )
                 self._save()  # save the config for the KB to disk
@@ -130,7 +122,6 @@ class KnowledgeBase:
                 reranker,
                 auto_context_model,
                 vector_db,
-                chunk_db,
                 file_system,
             )
 
@@ -148,7 +139,6 @@ class KnowledgeBase:
         reranker: Optional[Reranker],
         auto_context_model: Optional[LLM],
         vector_db: Optional[VectorDB],
-        chunk_db: Optional[ChunkDB],
         file_system: Optional[FileSystem],
     ):
         """Initialize the knowledge base components.
@@ -164,9 +154,6 @@ class KnowledgeBase:
             vector_db
             if vector_db
             else BasicVectorDB(self.kb_id, self.storage_directory)
-        )
-        self.chunk_db = (
-            chunk_db if chunk_db else BasicChunkDB(self.kb_id, self.storage_directory)
         )
         self.file_system = (
             file_system
@@ -188,7 +175,6 @@ class KnowledgeBase:
             "reranker": self.reranker.to_dict(),
             "auto_context_model": self.auto_context_model.to_dict(),
             "vector_db": self.vector_db.to_dict(),
-            "chunk_db": self.chunk_db.to_dict(),
             "file_system": self.file_system.to_dict(),
         }
         # Combine metadata and components
@@ -201,7 +187,6 @@ class KnowledgeBase:
         auto_context_model=None,
         reranker=None,
         file_system=None,
-        chunk_db=None,
         vector_db=None,
     ):
         """Load a knowledge base configuration from disk.
@@ -212,7 +197,6 @@ class KnowledgeBase:
             auto_context_model (Optional[LLM], optional): Override stored AutoContext model.
             reranker (Optional[Reranker], optional): Override stored reranker model.
             file_system (Optional[FileSystem], optional): Override stored file system.
-            chunk_db (Optional[ChunkDB], optional): Override stored chunk database.
             vector_db (Optional[VectorDB], optional): Override stored vector database.
 
         Note:
@@ -226,8 +210,9 @@ class KnowledgeBase:
         components = data.get("components", {})
         # Deserialize components
         self.embedding_model = Embedding.from_dict(
-            components.get("embedding_model", {}))
-        
+            components.get("embedding_model", {})
+        )
+
         self.reranker = (
             reranker if reranker else Reranker.from_dict(components.get("reranker", {}))
         )
@@ -248,14 +233,6 @@ class KnowledgeBase:
             if vector_db
             else VectorDB.from_dict(components.get("vector_db", {}))
         )
-        if chunk_db is not None:
-            logging.warning(
-                f"Overriding stored chunk_db for KB '{self.kb_id}' during load.",
-                extra=base_extra,
-            )
-            self.chunk_db = chunk_db
-        else:
-            self.chunk_db = ChunkDB.from_dict(components.get("chunk_db", {}))
 
         file_system_dict = components.get("file_system", None)
 
@@ -285,7 +262,6 @@ class KnowledgeBase:
         for doc_id in doc_ids_to_delete:
             self.delete_document(doc_id)
 
-        self.chunk_db.delete()
         self.vector_db.delete()
         self.file_system.delete_kb(self.kb_id)
 
@@ -532,15 +508,6 @@ class KnowledgeBase:
 
             # --- DB Storage Step ---
             step_start_time = time.perf_counter()
-            add_chunks_to_db(
-                chunk_db=self.chunk_db,
-                chunks=chunks,
-                chunks_to_embed=chunks_to_embed,
-                chunk_embeddings=chunk_embeddings,
-                metadata=metadata,
-                doc_id=doc_id,
-                supp_id=supp_id,
-            )
             add_vectors_to_db(
                 vector_db=self.vector_db,
                 chunks=chunks,
@@ -556,7 +523,6 @@ class KnowledgeBase:
                     "step": "db_storage",
                     "duration_s": round(step_duration, 4),
                     "vector_db": self.vector_db.__class__.__name__,
-                    "chunk_db": self.chunk_db.__class__.__name__,
                 },
             )
 
@@ -739,7 +705,6 @@ class KnowledgeBase:
         Args:
             doc_id (str): ID of the document to delete.
         """
-        self.chunk_db.remove_document(doc_id)
         self.vector_db.remove_document(doc_id)
         self.file_system.delete_directory(self.kb_id, doc_id)
 
@@ -748,7 +713,7 @@ class KnowledgeBase:
 
         Internal method to retrieve chunk text from the chunk database.
         """
-        return self.chunk_db.get_chunk_text(doc_id, chunk_index)
+        return self.vector_db.get_chunk_text(doc_id, chunk_index)
 
     def _get_is_visual(self, doc_id: str, chunk_index: int) -> bool:
         """Check if a chunk contains visual content.
@@ -756,14 +721,6 @@ class KnowledgeBase:
         Internal method to check chunk type.
         """
         return self.chunk_db.get_is_visual(doc_id, chunk_index)
-
-    def _get_chunk_content(self, doc_id: str, chunk_index: int) -> tuple[str, str]:
-        """Get the full content of a specific chunk.
-
-        Internal method to retrieve chunk content.
-        """
-        chunk_text = self.chunk_db.get_chunk_text(doc_id, chunk_index)
-        return chunk_text
 
     def _get_segment_context(self, chunk_body: str) -> str:
         """Generate context for a segment.
@@ -841,8 +798,12 @@ class KnowledgeBase:
 
         Internal method for page number lookup.
         """
-        start_page_number, _ = self.chunk_db.get_chunk_page_numbers(doc_id, chunk_start)
-        _, end_page_number = self.chunk_db.get_chunk_page_numbers(doc_id, chunk_end - 1)
+        start_page_number, _ = self.vector_db.get_chunk_page_numbers(  # type: ignore
+            doc_id, chunk_start
+        )
+        _, end_page_number = self.vector_db.get_chunk_page_numbers(  # type: ignore
+            doc_id, chunk_end - 1
+        )
         return start_page_number, end_page_number
 
     def _get_segment_content_from_database(
