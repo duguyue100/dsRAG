@@ -77,6 +77,11 @@ class VectorDB(ABC):
         pass
 
     @abstractmethod
+    def get_all_doc_ids(self) -> list[str]:
+        """Retrieve all document IDs stored in the vector database."""
+        pass
+
+    @abstractmethod
     def delete(self) -> None:
         """Delete the vector database."""
         pass

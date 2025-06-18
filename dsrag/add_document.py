@@ -7,7 +7,6 @@ from dsrag.auto_context import (
 )
 from dsrag.llm import LLM
 from dsrag.embedding import Embedding
-from dsrag.database.chunk import ChunkDB
 from dsrag.database.vector import VectorDB
 from dsrag.custom_term_mapping import annotate_chunks
 import logging
@@ -107,8 +106,12 @@ def auto_context(
     # get section summaries in parallel
     if auto_context_config.get("get_section_summaries", False):
         # Get concurrent workers, default to 5 if not specified
-        max_concurrent_workers = auto_context_config.get("llm_max_concurrent_requests", 5)
-        with ThreadPoolExecutor(max_workers=min(max_concurrent_workers, len(sections))) as executor:
+        max_concurrent_workers = auto_context_config.get(
+            "llm_max_concurrent_requests", 5
+        )
+        with ThreadPoolExecutor(
+            max_workers=min(max_concurrent_workers, len(sections))
+        ) as executor:
             future_to_section = {
                 executor.submit(
                     process_section_summary,
@@ -212,37 +215,6 @@ def get_embeddings(embedding_model: Embedding, chunks_to_embed):
     return chunk_embeddings
 
 
-def add_chunks_to_db(
-    chunk_db: ChunkDB,
-    chunks,
-    chunks_to_embed,
-    chunk_embeddings,
-    metadata,
-    doc_id,
-    supp_id,
-):
-    # add the chunks to the chunk database
-    assert len(chunks) == len(chunk_embeddings) == len(chunks_to_embed)
-    chunk_db.add_document(
-        doc_id,
-        {
-            i: {
-                "chunk_text": chunk["content"],
-                "document_title": chunk["document_title"],
-                "document_summary": chunk["document_summary"],
-                "section_title": chunk["section_title"],
-                "section_summary": chunk["section_summary"],
-                "chunk_page_start": chunk.get("page_start", None),
-                "chunk_page_end": chunk.get("page_end", None),
-                "is_visual": chunk.get("is_visual", False),
-            }
-            for i, chunk in enumerate(chunks)
-        },
-        supp_id,
-        metadata,
-    )
-
-
 def add_vectors_to_db(vector_db: VectorDB, chunks, chunk_embeddings, metadata, doc_id):
     # create metadata list to add to the vector database
     vector_metadata = []
@@ -257,6 +229,10 @@ def add_vectors_to_db(vector_db: VectorDB, chunks, chunk_embeddings, metadata, d
         vector_metadata.append(
             {
                 "doc_id": doc_id,
+                "document_title": chunk["document_title"],
+                "document_summary": chunk["document_summary"],
+                "section_title": chunk["section_title"],
+                "section_summary": chunk["section_summary"],
                 "chunk_index": i,
                 "chunk_text": chunk["content"],
                 "chunk_header": get_chunk_header(
@@ -268,10 +244,11 @@ def add_vectors_to_db(vector_db: VectorDB, chunks, chunk_embeddings, metadata, d
                 ),
                 "chunk_page_start": chunk_page_start,
                 "chunk_page_end": chunk_page_end,
+                "is_visual": chunk.get("is_visual", False),
                 # Add the rest of the metadata to the vector metadata
                 **metadata,
             }
         )
 
     # add the vectors and metadata to the vector database
-    vector_db.add_vectors(vectors=chunk_embeddings, metadata=vector_metadata)
+    vector_db.add_vectors(vectors=chunk_embeddings, metadata=vector_metadata)  # type: ignore

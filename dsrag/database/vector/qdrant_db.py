@@ -136,6 +136,13 @@ class QdrantVectorDB(VectorDB):
 
         self.client.upsert(self.kb_id, points)
 
+        # Create a payload index for the doc_id field if it doesn't exist
+        self.client.create_payload_index(
+            collection_name=self.kb_id,
+            field_name="doc_id",
+            field_schema="keyword",
+        )
+
     def remove_document(self, doc_id) -> None:
         """Removes a document from a Qdrant collection.
 
@@ -224,7 +231,7 @@ class QdrantVectorDB(VectorDB):
             scroll_result[0][0].payload.get("content", None) if scroll_result else None
         )
 
-    def get_chunk_page_numbers(
+    def get_chunk_page_numbers(  # type: ignore
         self, doc_id: str, chunk_index: int
     ) -> tuple[int | None, int | None]:
         """Retrieves the page numbers of a specific chunk by document ID and chunk index.
@@ -265,6 +272,20 @@ class QdrantVectorDB(VectorDB):
             chunk_page_end = None
 
         return chunk_page_start, chunk_page_end
+
+    def get_all_doc_ids(self) -> list[str]:
+        """Retrieves all document IDs stored in the vector database.
+
+        Returns:
+            A list of document IDs.
+        """
+
+        docs = self.client.facet(
+            collection_name=self.kb_id,
+            key="doc_id",
+        )
+
+        return [doc.value for doc in docs.hits]
 
     def get_num_vectors(self):
         return self.client.count(self.kb_id).count

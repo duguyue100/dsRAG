@@ -258,7 +258,7 @@ class KnowledgeBase:
         Removes all documents, vectors, chunks, and metadata associated with this KB.
         """
         # delete all documents in the KB
-        doc_ids_to_delete = self.chunk_db.get_all_doc_ids()
+        doc_ids_to_delete = self.vector_db.get_all_doc_ids()
         for doc_id in doc_ids_to_delete:
             self.delete_document(doc_id)
 
@@ -435,7 +435,7 @@ class KnowledgeBase:
                 raise ValueError("Either text or file_path must be provided")
 
             # verify that the document does not already exist in the KB - the doc_id should be unique
-            if doc_id in self.chunk_db.get_all_doc_ids():
+            if doc_id in self.vector_db.get_all_doc_ids():
                 ingestion_logger.warning(
                     "Document already exists in knowledge base, skipping",
                     extra=base_extra,
@@ -720,7 +720,7 @@ class KnowledgeBase:
 
         Internal method to check chunk type.
         """
-        return self.chunk_db.get_is_visual(doc_id, chunk_index)
+        return self.vector_db.get_is_visual(doc_id, chunk_index)
 
     def _get_segment_context(self, chunk_body: str) -> str:
         """Generate context for a segment.
@@ -737,8 +737,10 @@ class KnowledgeBase:
 
         Internal method to create segment headers.
         """
-        document_title = self.chunk_db.get_document_title(doc_id, chunk_index) or ""
-        document_summary = self.chunk_db.get_document_summary(doc_id, chunk_index) or ""
+        document_title = self.vector_db.get_document_title(doc_id, chunk_index) or ""
+        document_summary = (
+            self.vector_db.get_document_summary(doc_id, chunk_index) or ""
+        )
         return get_segment_header(
             document_title=document_title, document_summary=document_summary
         )
