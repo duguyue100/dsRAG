@@ -231,8 +231,8 @@ def add_vectors_to_db(vector_db: VectorDB, chunks, chunk_embeddings, metadata, d
                 "doc_id": doc_id,
                 "document_title": chunk["document_title"],
                 "document_summary": chunk["document_summary"],
-                "section_title": chunk["section_title"],
-                "section_summary": chunk["section_summary"],
+                "section_title": chunk.get("section_title", ""),
+                "section_summary": chunk.get("section_summary", ""),
                 "chunk_index": i,
                 "chunk_text": chunk["content"],
                 "chunk_header": get_chunk_header(
