@@ -252,13 +252,21 @@ class KnowledgeBase:
 
         self.vector_dimension = self.embedding_model.dimension
 
+    def get_all_doc_ids(self) -> List[str]:
+        """Get all document IDs in the knowledge base.
+
+        Returns:
+            List[str]: List of document IDs.
+        """
+        return self.vector_db.get_all_doc_ids()
+
     def delete(self):
         """Delete the knowledge base and all associated data.
 
         Removes all documents, vectors, chunks, and metadata associated with this KB.
         """
         # delete all documents in the KB
-        doc_ids_to_delete = self.vector_db.get_all_doc_ids()
+        doc_ids_to_delete = self.get_all_doc_ids()
         for doc_id in doc_ids_to_delete:
             self.delete_document(doc_id)
 
