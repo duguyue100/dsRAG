@@ -39,6 +39,7 @@ class QdrantVectorDB(VectorDB):
         api_key: Optional[str] = None,
         prefix: Optional[str] = None,
         timeout: Optional[int] = None,
+        feature_size: Optional[int] = None,
         host: Optional[str] = None,
         path: Optional[str] = None,
     ):
@@ -85,6 +86,15 @@ class QdrantVectorDB(VectorDB):
         }
         self.client = qdrant_client.QdrantClient(**self.client_options)
 
+        self.feature_size = feature_size
+        if not self.client.collection_exists(self.kb_id) and feature_size is not None:
+            self.client.create_collection(
+                self.kb_id,
+                vectors_config=qdrant_client.models.VectorParams(
+                    size=feature_size, distance=qdrant_client.models.Distance.COSINE
+                ),
+            )
+
     def close(self):
         """Closes the connection to Qdrant."""
         self.client.close()
@@ -108,11 +118,13 @@ class QdrantVectorDB(VectorDB):
                 "Error in add_vectors: the number of vectors and metadata items must be the same."
             ) from exc
 
-        if not self.client.collection_exists(self.kb_id):
+        if not self.client.collection_exists(self.kb_id) and self.feature_size is None:
+            self.feature_size = len(vectors[0])
             self.client.create_collection(
                 self.kb_id,
                 vectors_config=qdrant_client.models.VectorParams(
-                    size=len(vectors[0]), distance=qdrant_client.models.Distance.COSINE
+                    size=self.feature_size,
+                    distance=qdrant_client.models.Distance.COSINE,
                 ),
             )
         points = []
