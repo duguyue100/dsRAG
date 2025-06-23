@@ -82,6 +82,33 @@ class VectorDB(ABC):
         pass
 
     @abstractmethod
+    def get_document_title(self, doc_id: str, chunk_index: int) -> Optional[str]:
+        """Retrieve the title of a specific document chunk by document ID and chunk
+        index.
+
+        This is an optional method that may not be implemented by all vector databases.
+        """
+        pass
+
+    @abstractmethod
+    def get_document_summary(self, doc_id: str, chunk_index: int) -> Optional[str]:
+        """Retrieve the summary of a specific document chunk by document ID and chunk
+        index.
+
+        This is an optional method that may not be implemented by all vector databases.
+        """
+        pass
+
+    @abstractmethod
+    def get_is_visual(self, doc_id: str, chunk_index: int) -> bool:
+        """Retrieve whether a specific document chunk is visual by document ID and chunk
+        index.
+
+        This is an optional method that may not be implemented by all vector databases.
+        """
+        pass
+
+    @abstractmethod
     def delete(self) -> None:
         """Delete the vector database."""
         pass

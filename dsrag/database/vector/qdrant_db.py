@@ -30,6 +30,7 @@ class QdrantVectorDB(VectorDB):
     def __init__(
         self,
         kb_id: str,
+        feature_size: int,
         location: Optional[str] = None,
         url: Optional[str] = None,
         port: Optional[int] = 6333,
@@ -39,7 +40,6 @@ class QdrantVectorDB(VectorDB):
         api_key: Optional[str] = None,
         prefix: Optional[str] = None,
         timeout: Optional[int] = None,
-        feature_size: Optional[int] = None,
         host: Optional[str] = None,
         path: Optional[str] = None,
     ):
@@ -87,7 +87,7 @@ class QdrantVectorDB(VectorDB):
         self.client = qdrant_client.QdrantClient(**self.client_options)
 
         self.feature_size = feature_size
-        if not self.client.collection_exists(self.kb_id) and feature_size is not None:
+        if not self.client.collection_exists(self.kb_id):
             self.client.create_collection(
                 self.kb_id,
                 vectors_config=qdrant_client.models.VectorParams(
@@ -212,15 +212,17 @@ class QdrantVectorDB(VectorDB):
             )
         return results
 
-    def get_chunk_text(self, doc_id: str, chunk_index: int) -> Optional[str]:
-        """Retrieves the text of a specific chunk by document ID and chunk index.
+    def _get_chunk(
+        self, doc_id: str, chunk_index: int
+    ) -> Optional[qdrant_client.models.PointStruct]:
+        """Retrieves a specific chunk by document ID and chunk index.
 
         Args:
             doc_id: The ID of the document.
             chunk_index: The index of the chunk.
 
         Returns:
-            The text of the specified chunk, or None if not found.
+            The PointStruct representing the chunk, or None if not found.
         """
         scroll_result = self.client.scroll(
             collection_name=self.kb_id,
@@ -239,9 +241,21 @@ class QdrantVectorDB(VectorDB):
             limit=1,
         )
 
-        return (
-            scroll_result[0][0].payload.get("content", None) if scroll_result else None
-        )
+        return scroll_result[0][0] if scroll_result else None
+
+    def get_chunk_text(self, doc_id: str, chunk_index: int) -> Optional[str]:
+        """Retrieves the text of a specific chunk by document ID and chunk index.
+
+        Args:
+            doc_id: The ID of the document.
+            chunk_index: The index of the chunk.
+
+        Returns:
+            The text of the specified chunk, or None if not found.
+        """
+        chunk = self._get_chunk(doc_id, chunk_index)
+
+        return chunk.payload.get("content", None) if chunk else None
 
     def get_chunk_page_numbers(  # type: ignore
         self, doc_id: str, chunk_index: int
@@ -255,27 +269,12 @@ class QdrantVectorDB(VectorDB):
             A tuple containing the start and end page numbers of the specified chunk,
             or None if not found.
         """
-        scroll_result = self.client.scroll(
-            collection_name=self.kb_id,
-            scroll_filter=qdrant_client.models.Filter(
-                must=[
-                    qdrant_client.models.FieldCondition(
-                        key="doc_id",
-                        match=qdrant_client.models.MatchValue(value=doc_id),
-                    ),
-                    qdrant_client.models.FieldCondition(
-                        key="chunk_index",
-                        match=qdrant_client.models.MatchValue(value=chunk_index),
-                    ),
-                ]
-            ),
-            limit=1,
-        )
+        chunk = self._get_chunk(doc_id, chunk_index)
 
-        if scroll_result is None:
+        if chunk is None:
             return None, None
 
-        metadata = scroll_result[0][0].payload.get("metadata", {})
+        metadata = chunk.payload.get("metadata", {})
         chunk_page_start = metadata.get("chunk_page_start", None)
         chunk_page_end = metadata.get("chunk_page_end", None)
         if chunk_page_start == "":
@@ -299,6 +298,61 @@ class QdrantVectorDB(VectorDB):
 
         return [doc.value for doc in docs.hits]
 
+    def get_document_title(self, doc_id: str, chunk_index: int) -> Optional[str]:
+        """Retrieves the title of a specific document chunk by document ID and chunk
+        index.
+
+        Args:
+            doc_id: The ID of the document.
+            chunk_index: The index of the chunk.
+
+        Returns:
+            The title of the specified document chunk, or None if not found.
+        """
+        chunk = self._get_chunk(doc_id, chunk_index)
+
+        return (
+            chunk.payload.get("metadata", {}).get("document_title", None)
+            if chunk
+            else None
+        )
+
+    def get_document_summary(self, doc_id: str, chunk_index: int) -> Optional[str]:
+        """Retrieves the summary of a specific document by its ID.
+
+        Args:
+            doc_id: The ID of the document.
+
+        Returns:
+            The summary of the specified document, or None if not found.
+        """
+        chunk = self._get_chunk(doc_id, 0)
+
+        return (
+            chunk.payload.get("metadata", {}).get("document_summary", None)
+            if chunk
+            else None
+        )
+
+    def get_is_visual(self, doc_id: str, chunk_index: int) -> bool:
+        """Retrieves whether a specific document chunk is visual by document ID and
+        chunk index.
+
+        Args:
+            doc_id: The ID of the document.
+            chunk_index: The index of the chunk.
+
+        Returns:
+            True if the specified document chunk is visual, False otherwise, or None if not found.
+        """
+        chunk = self._get_chunk(doc_id, chunk_index)
+
+        return (
+            chunk.payload.get("metadata", {}).get("is_visual", False)
+            if chunk
+            else False
+        )
+
     def get_num_vectors(self):
         return self.client.count(self.kb_id).count
 
@@ -310,5 +364,6 @@ class QdrantVectorDB(VectorDB):
         return {
             **super().to_dict(),
             "kb_id": self.kb_id,
+            "feature_size": self.feature_size,
             **self.client_options,
         }
