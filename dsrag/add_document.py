@@ -3,7 +3,6 @@ from dsrag.auto_context import (
     get_document_summary,
     get_section_summary,
     get_chunk_header,
-    get_chunk_summary,
 )
 from dsrag.llm import LLM
 from dsrag.embedding import Embedding
@@ -148,19 +147,6 @@ def auto_context(
         chunk["document_title"] = document_title
         chunk["document_summary"] = document_summary
         section_index = chunk["section_index"]
-        if auto_context_config.get("get_chunk_summaries", False):
-            chunk["chunk_summary"] = get_chunk_summary(
-                auto_context_model=auto_context_model,
-                chunk_text=chunk["content"],
-                document_title=document_title,
-                document_summary=document_summary,
-                chunk_summarization_guidance=auto_context_config.get(
-                    "chunk_summarization_guidance", ""
-                ),
-                language=language,
-            )
-        else:
-            chunk["chunk_summary"] = ""
         if section_index is not None:
             chunk["section_title"] = sections[section_index]["title"]
             chunk["section_summary"] = sections[section_index]["summary"]
