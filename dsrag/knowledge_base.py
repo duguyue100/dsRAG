@@ -1,5 +1,4 @@
 from __future__ import annotations
-import numpy as np
 import os
 import time
 import uuid
@@ -759,13 +758,6 @@ class KnowledgeBase:
         Internal method to interface with embedding model.
         """
         return self.embedding_model.get_embeddings(text, input_type)
-
-    def _cosine_similarity(self, v1, v2):
-        """Calculate cosine similarity between vectors.
-
-        Internal method for vector similarity calculation.
-        """
-        return np.dot(v1, v2)
 
     def _search(
         self, query: str, top_k: int, metadata_filter: Optional[MetadataFilter] = None
