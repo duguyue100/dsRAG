@@ -1013,7 +1013,7 @@ class KnowledgeBase:
             step_start_time = time.perf_counter()
             all_ranked_results = self._get_all_ranked_results(
                 search_queries=search_queries,
-                top_k=min(200, 3 * top_k_for_document_selection),
+                top_k=min(200, int(3 * top_k_for_document_selection)),
                 metadata_filter=metadata_filter,
             )
             step_duration = time.perf_counter() - step_start_time
